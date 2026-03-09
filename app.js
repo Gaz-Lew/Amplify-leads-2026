@@ -297,59 +297,6 @@ async function updateLeadInFirestore(lead) {
         // Load settings
         loadSettings();
 
-                // Initialize Firebase
-        if (typeof firebase !== 'undefined') {
-            try {
-                db = firebase.firestore();
-                window._db = db;
-                console.log('✅ Firebase Firestore initialized');
-                listenToLeads(); // ← ADD THIS
-            } catch (e) {
-                console.error('Firebase initialization error:', e);
-                db = null;
-            }
-        } else {
-            console.error('❌ Firebase SDK not loaded!');
-        }
-function listenToLeads() {
-    if (!db) return;
-    db.collection('leads').onSnapshot(
-        (snapshot) => {
-            _firestoresyncing = true;
-            state.leads = [];
-            snapshot.forEach((doc) => {
-                const raw = doc.data();
-                const cleaned = {};
-                Object.keys(raw).forEach(k => { cleaned[k.trim()] = raw[k]; });
-
-                // Normalise status to app format
-                if (cleaned.status) {
-                    const s = cleaned.status.toLowerCase().trim();
-                    const statusMap = {
-                        'dq':              'dq',
-                        'revisit':         'revisit',
-                        'booked':          'booked',
-                        'live':            'booked',
-                        'no answer':       'dq',
-                        'not interested':  'not-interested',
-                        'wrong number':    'wrong-number',
-                    };
-                    cleaned.status = statusMap[s] || s;
-                }
-
-                state.leads.push({ id: doc.id, ...cleaned });
-            });
-            renderAll();
-            console.log('🔄 Leads synced from Firestore:', state.leads.length);
-            _firestoresyncing = false;
-        },
-        (error) => {
-            console.error('Error listening to leads:', error);
-            _firestoresyncing = false;
-        }
-    );
-}
-
         // Load saved reps
         const savedReps = localStorage.getItem('asgReps');
         if (savedReps) {
@@ -1034,6 +981,7 @@ function listenToLeads() {
         if (!lead.callHistory) lead.callHistory = [];
         lead.callHistory.push({ date: new Date().toISOString(), result, notes });
         
+        updateLeadInFirestore(lead);
         saveLeads();
         updateLeadInFirestore(lead);
         closeModal('callResultModal');
@@ -1091,59 +1039,59 @@ function listenToLeads() {
     }
 
     function renderLeadsTable() {
-        const filtered = getFilteredLeads();
-        const tbody = document.getElementById('leadsTableBody');
-        const empty = document.getElementById('emptyStateLeads');
-        
-        // Update tab counts
-        ['leads', 'booked', 'revisit', 'not-interested', 'wrong-number'].forEach((tab) => {
-            const el = document.getElementById(`count-${tab}`);
-            if (el) {
-                if (tab === 'leads') {
-                    el.textContent = state.leads.filter((l) => ['dq', 'revisit'].includes(l.status)).length;
-                } else {
-                    el.textContent = state.leads.filter((l) => l.status === tab).length;
-                }
+    const filtered = getFilteredLeads();
+    const tbody = document.getElementById('leadsTableBody');
+    const empty = document.getElementById('emptyStateLeads');
+
+    ['leads', 'booked', 'revisit', 'not-interested', 'wrong-number'].forEach((tab) => {
+        const el = document.getElementById(`count-${tab}`);
+        if (el) {
+            if (tab === 'leads') {
+                el.textContent = state.leads.filter((l) => ['dq', 'revisit'].includes(l.status)).length;
+            } else {
+                el.textContent = state.leads.filter((l) => l.status === tab).length;
+            }
+        }
+    });
+
+    if (!filtered.length) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+    }
+
+    empty.style.display = 'none';
+    tbody.innerHTML = filtered.map((lead) => `
+        <tr data-id="${lead.id}" class="lead-row">
+            <td class="lead-name-cell">
+                <div class="lead-name-primary lead-name-clickable" onclick="openLeadDrawer('${lead.id}')">${lead.name}</div>
+                <div class="lead-address-preview">${lead.suburb || '—'}</div>
+            </td>
+            <td>
+                <a href="tel:${lead.phone}" class="lead-phone-link">${lead.phone}</a>
+            </td>
+            <td><span class="rep-tag"><span class="rep-dot"></span>${getRepName(lead.dqRep)}</span></td>
+            <td>${getStatusBadge(lead.status)}</td>
+            <td>${lead.lastCall ? formatTime(lead.lastCall) : '<span style="color:var(--text-muted);">Never</span>'}</td>
+            <td>${getResultBadge(lead.result)}</td>
+            <td class="action-cell" onclick="event.stopPropagation()">
+                <button class="icon-btn" onclick="event.stopPropagation(); openLeadDrawer('${lead.id}')" title="Edit">✏️</button>
+                <button class="icon-btn" onclick="event.stopPropagation(); openCallModal('${lead.id}')" title="Log Call">📞</button>
+                <button class="icon-btn delete" onclick="event.stopPropagation(); deleteLead('${lead.id}')" title="Delete">🗑️</button>
+            </td>
+        </tr>
+    `).join('');
+
+    // Row click handlers
+    document.querySelectorAll('.lead-row').forEach((row) => {
+        row.addEventListener('click', (e) => {
+            if (!e.target.closest('button') && !e.target.closest('a')) {
+                openLeadDrawer(row.dataset.id); // ← string ID, no parseInt
             }
         });
-        
-        if (!filtered.length) {
-            tbody.innerHTML = '';
-            empty.style.display = 'block';
-            return;
-        }
-        
-        empty.style.display = 'none';
-        tbody.innerHTML = filtered.map((lead) => `
-            <tr data-id="${lead.id}" class="lead-row">
-                <td class="lead-name-cell">
-                    <div class="lead-name-primary lead-name-clickable" onclick="openLeadDrawer(${lead.id})">${lead.name}</div>
-                    <div class="lead-address-preview">${lead.suburb || '—'}</div>
-                </td>
-                <td>
-                    <a href="tel:${lead.phone}" class="lead-phone-link">${lead.phone}</a>
-                </td>
-                <td><span class="rep-tag"><span class="rep-dot"></span>${getRepName(lead.dqRep)}</span></td>
-                <td>${getStatusBadge(lead.status)}</td>
-                <td>${lead.lastCall ? formatTime(lead.lastCall) : '<span style="color:var(--text-muted);">Never</span>'}</td>
-                <td>${getResultBadge(lead.result)}</td>
-                <td class="action-cell" onclick="event.stopPropagation()">
-                    <button class="icon-btn" onclick="event.stopPropagation(); openLeadDrawer(${lead.id})" title="Edit">✏️</button>
-                    <button class="icon-btn" onclick="event.stopPropagation(); openCallModal(${lead.id})" title="Log Call">📞</button>
-                    <button class="icon-btn delete" onclick="event.stopPropagation(); deleteLead(${lead.id})" title="Delete">🗑️</button>
-                </td>
-            </tr>
-        `).join('');
+    });
+}
 
-        // Row click handlers - click anywhere on row to open drawer
-        document.querySelectorAll('.lead-row').forEach((row) => {
-            row.addEventListener('click', (e) => {
-                if (!e.target.closest('button') && !e.target.closest('a')) {
-                    openLeadDrawer(parseInt(row.dataset.id));
-                }
-            });
-        });
-    }
 
     // ==================== SIDEBAR ====================
     // ==================== LEAD PROFILE PANEL ====================
@@ -1318,7 +1266,7 @@ function listenToLeads() {
                     <label>Call Notes</label>
                     <textarea id="logNotes" placeholder="What happened on this call?"></textarea>
                 </div>
-                <button class="btn btn-primary" style="width:100%;" onclick="submitProfileCallLog(${lead.id})">📞 Save Call Log</button>
+                <button class="btn btn-primary" style="width:100%;" onclick="submitProfileCallLog(${'lead.id'})">📞 Save Call Log</button>
             </div>`;
     }
 

@@ -924,65 +924,33 @@ function listenToLeads() {
         empty.style.display = 'none';
         tbody.innerHTML = filtered.map((lead) => `
             <tr data-id="${lead.id}" class="lead-row">
-                <td data-field="name" class="editable lead-name">${lead.name}</td>
-                <td data-field="phone" class="editable"><a href="tel:${lead.phone}">${lead.phone}</a></td>
+                <td class="lead-name-cell">
+                    <div class="lead-name-primary">${lead.name}</div>
+                    <div class="lead-address-preview">${lead.suburb || '—'}</div>
+                </td>
+                <td>
+                    <a href="tel:${lead.phone}" class="lead-phone-link">${lead.phone}</a>
+                </td>
                 <td><span class="rep-tag"><span class="rep-dot"></span>${getRepName(lead.dqRep)}</span></td>
-                <td data-field="suburb" class="editable">${lead.suburb || '—'}</td>
                 <td>${getStatusBadge(lead.status)}</td>
                 <td>${lead.lastCall ? formatTime(lead.lastCall) : '<span style="color:var(--text-muted);">Never</span>'}</td>
                 <td>${getResultBadge(lead.result)}</td>
-                <td onclick="event.stopPropagation()">
-                    <button class="btn btn-secondary btn-xs" onclick="event.stopPropagation(); openCallModal(${lead.id})">📞 Log Call</button>
+                <td class="actions-cell" onclick="event.stopPropagation()">
+                    <div class="row-actions">
+                        <button class="btn-action-icon" onclick="event.stopPropagation(); quickEditLead(${lead.id})" title="Quick Edit">✏️</button>
+                        <button class="btn-action-icon" onclick="event.stopPropagation(); openCallModal(${lead.id})" title="Log Call">📞</button>
+                        <button class="btn-action-icon" onclick="event.stopPropagation(); showLeadSidebar(${lead.id})" title="View Details">👁️</button>
+                    </div>
                 </td>
             </tr>
         `).join('');
-        
-        // Row click handlers
+
+        // Row click handlers - click anywhere on row to open sidebar
         document.querySelectorAll('.lead-row').forEach((row) => {
             row.addEventListener('click', (e) => {
-                if (!e.target.closest('button') && !e.target.closest('a') && e.target.tagName !== 'INPUT') {
+                if (!e.target.closest('button') && !e.target.closest('a')) {
                     showLeadSidebar(parseInt(row.dataset.id));
                 }
-            });
-        });
-        
-        // Inline edit handlers
-        document.querySelectorAll('.editable').forEach((cell) => {
-            cell.addEventListener('click', function(e) {
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'A') return;
-                const original = this.textContent.trim();
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.value = original;
-                input.style.width = '100%';
-                this.innerHTML = '';
-                this.appendChild(input);
-                input.focus();
-                input.select();
-                
-                const save = () => {
-                    const newVal = input.value.trim();
-                    this.textContent = newVal;
-                    const leadId = parseInt(this.closest('tr').dataset.id);
-                    const lead = state.leads.find((l) => l.id === leadId);
-                    const field = this.dataset.field;
-                    if (lead && field) {
-                        lead[field] = newVal;
-                        if (['houseNum', 'street', 'suburb', 'postcode'].some((f) => field.includes(f))) {
-                            lead.address = buildAddress(lead);
-                        }
-                        updateLeadInFirestore(lead);
-                        showToast('Updated', 'success');
-                    }
-                };
-                
-                input.onblur = save;
-                input.onkeydown = (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        save();
-                    }
-                };
             });
         });
     }

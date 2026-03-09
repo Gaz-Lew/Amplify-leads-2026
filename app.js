@@ -681,7 +681,7 @@ function listenToLeads() {
     let currentDrawerLeadId = null;
     
     // Open lead drawer with full details
-    window.openLeadDrawer = function(leadId) {
+    function openLeadDrawer(leadId) {
         const lead = state.leads.find(l => l.id === leadId);
         if (!lead) return;
         
@@ -766,7 +766,7 @@ function listenToLeads() {
         drawer.classList.add('active');
         overlay.classList.add('active');
         document.body.style.overflow = 'hidden';
-    };
+    }
     
     function renderTimelineItems(lead) {
         const history = lead.communicationHistory || [];
@@ -794,7 +794,7 @@ function listenToLeads() {
         return div.innerHTML;
     }
     
-    window.addQuickNote = function() {
+    function addQuickNote() {
         const input = document.getElementById('quickNoteInput');
         const note = input.value.trim();
         if (!note || !currentDrawerLeadId) return;
@@ -817,18 +817,18 @@ function listenToLeads() {
         document.getElementById('drawerTimeline').innerHTML = renderTimelineItems(lead);
         
         showToast('Note added', 'success');
-    };
+    }
     
-    window.closeDrawer = function() {
+    function closeDrawer() {
         const drawer = document.getElementById('leadDrawer');
         const overlay = document.getElementById('drawerOverlay');
         drawer.classList.remove('active');
         overlay.classList.remove('active');
         document.body.style.overflow = '';
         currentDrawerLeadId = null;
-    };
+    }
     
-    window.saveLeadFromDrawer = function() {
+    function saveLeadFromDrawer() {
         if (!currentDrawerLeadId) return;
         
         const lead = state.leads.find(l => l.id === currentDrawerLeadId);

@@ -1011,70 +1011,71 @@ function listenToLeads() {
         ).join('');
         body.innerHTML = `
             <div class="profile-section">
-                <div class="profile-section-title">Contact Info</div>
+                <div class="profile-section-title">📇 Contact Info</div>
                 <div class="profile-fields">
                     <div class="profile-field">
                         <label>Full Name</label>
-                        <input id="pf_name" value="${lead.name || ''}" placeholder="Full name">
+                        <input id="pf_name" value="${lead.name || ''}" placeholder="Full name" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
+                        <div class="inline-edit-hint">Click to edit</div>
                     </div>
                     <div class="profile-field">
                         <label>Phone</label>
-                        <input id="pf_phone" value="${lead.phone || ''}" placeholder="Phone number">
+                        <input id="pf_phone" value="${lead.phone || ''}" placeholder="Phone number" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
                     </div>
                     <div class="profile-field full-width">
                         <label>Address</label>
-                        <input id="pf_address" value="${lead.address || buildAddress(lead)}" placeholder="Full address">
+                        <input id="pf_address" value="${lead.address || buildAddress(lead)}" placeholder="Full address" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
                     </div>
                     <div class="profile-field">
                         <label>Suburb</label>
-                        <input id="pf_suburb" value="${lead.suburb || ''}" placeholder="Suburb">
+                        <input id="pf_suburb" value="${lead.suburb || ''}" placeholder="Suburb" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
                     </div>
                     <div class="profile-field">
                         <label>State</label>
-                        <input id="pf_state" value="${lead.state || ''}" placeholder="State">
+                        <input id="pf_state" value="${lead.state || ''}" placeholder="State" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
                     </div>
                     <div class="profile-field">
                         <label>Postcode</label>
-                        <input id="pf_postcode" value="${lead.postcode || ''}" placeholder="Postcode">
+                        <input id="pf_postcode" value="${lead.postcode || ''}" placeholder="Postcode" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
                     </div>
                     <div class="profile-field">
                         <label>Lead Date</label>
-                        <input id="pf_leadDate" type="date" value="${lead.leadDate || ''}">
+                        <input id="pf_leadDate" type="date" value="${lead.leadDate || ''}" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
                     </div>
                 </div>
             </div>
             <div class="profile-section">
-                <div class="profile-section-title">Lead Info</div>
+                <div class="profile-section-title">📊 Lead Info</div>
                 <div class="profile-fields">
                     <div class="profile-field">
                         <label>Status</label>
-                        <select id="pf_status">
-                            <option value="dq" ${lead.status==='dq'?'selected':''}>DQ</option>
-                            <option value="booked" ${lead.status==='booked'?'selected':''}>Booked</option>
-                            <option value="revisit" ${lead.status==='revisit'?'selected':''}>Revisit</option>
-                            <option value="not-interested" ${lead.status==='not-interested'?'selected':''}>Not Interested</option>
-                            <option value="wrong-number" ${lead.status==='wrong-number'?'selected':''}>Wrong #</option>
+                        <select id="pf_status" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
+                            <option value="dq" ${lead.status==='dq'?'selected':''}>🔵 DQ</option>
+                            <option value="booked" ${lead.status==='booked'?'selected':''}>✅ Booked</option>
+                            <option value="revisit" ${lead.status==='revisit'?'selected':''}>📅 Revisit</option>
+                            <option value="not-interested" ${lead.status==='not-interested'?'selected':''}>❌ Not Interested</option>
+                            <option value="wrong-number" ${lead.status==='wrong-number'?'selected':''}>😶 Wrong #</option>
                         </select>
                     </div>
                     <div class="profile-field">
                         <label>Ownership</label>
-                        <select id="pf_ownership">
+                        <select id="pf_ownership" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
                             <option value="" ${!lead.ownership?'selected':''}>Unknown</option>
-                            <option value="owner" ${lead.ownership==='owner'?'selected':''}>Owner</option>
-                            <option value="renter" ${lead.ownership==='renter'?'selected':''}>Renter</option>
+                            <option value="owner" ${lead.ownership==='owner'?'selected':''}>🏠 Owner</option>
+                            <option value="renter" ${lead.ownership==='renter'?'selected':''}>🏡 Renter</option>
                         </select>
                     </div>
                     <div class="profile-field">
                         <label>Superannuation</label>
-                        <input id="pf_super" value="${lead.super || ''}" placeholder="Super fund / amount">
+                        <input id="pf_super" value="${lead.super || ''}" placeholder="Super fund / amount" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
                     </div>
                     <div class="profile-field">
                         <label>DQ Rep</label>
-                        <select id="pf_dqRep">${repOptions}</select>
+                        <select id="pf_dqRep" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">${repOptions}</select>
                     </div>
                     <div class="profile-field full-width">
                         <label>Notes</label>
-                        <textarea id="pf_notes" placeholder="Notes about this lead...">${lead.notes || ''}</textarea>
+                        <textarea id="pf_notes" placeholder="Notes about this lead..." onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">${lead.notes || ''}</textarea>
                     </div>
                 </div>
             </div>`;

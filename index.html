@@ -1210,8 +1210,23 @@
         </div>
     </div>
 
-    <!-- Toast Container -->
-    <div id="toastContainer" class="toast-container"></div>
+    <!-- Drawer Overlay & Slide-out Panel -->
+    <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+    <div class="drawer" id="leadDrawer">
+        <div class="drawer-header">
+            <h2 class="drawer-title" id="drawerTitle">📇 Lead Details</h2>
+            <button class="drawer-close-btn" onclick="closeDrawer()">×</button>
+        </div>
+        <div class="drawer-body" id="drawerBody">
+            <!-- Dynamic content loaded here -->
+        </div>
+        <div class="drawer-footer">
+            <button class="btn btn-secondary" onclick="closeDrawer()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveLeadFromDrawer()">💾 Save Changes</button>
+        </div>
+    </div>
+
+    <!-- Toast Container (already exists above, keeping reference) -->
 
     <!-- Sheet Settings Modal -->
     <div id="sheetSettingsModal" class="modal-overlay"></div>

@@ -655,12 +655,204 @@ function listenToLeads() {
 
     function showToast(msg, type = 'info') {
         const c = document.getElementById('toastContainer');
+        if (!c) return;
+        
+        const icons = {
+            success: '✅',
+            error: '❌',
+            warning: '⚠️',
+            info: 'ℹ️'
+        };
+        
         const t = document.createElement('div');
         t.className = `toast toast-${type}`;
-        t.textContent = msg;
+        t.innerHTML = `
+            <span class="toast-icon">${icons[type] || icons.info}</span>
+            <span class="toast-message">${msg}</span>
+        `;
         c.appendChild(t);
-        setTimeout(() => t.remove(), 3500);
+        setTimeout(() => {
+            t.style.animation = 'toastFadeOut 0.3s ease forwards';
+            setTimeout(() => t.remove(), 300);
+        }, 3500);
     }
+    
+    // Drawer state
+    let currentDrawerLeadId = null;
+    
+    // Open lead drawer with full details
+    window.openLeadDrawer = function(leadId) {
+        const lead = state.leads.find(l => l.id === leadId);
+        if (!lead) return;
+        
+        currentDrawerLeadId = leadId;
+        const drawer = document.getElementById('leadDrawer');
+        const overlay = document.getElementById('drawerOverlay');
+        const body = document.getElementById('drawerBody');
+        const title = document.getElementById('drawerTitle');
+        
+        title.textContent = `📇 ${lead.name || 'Unnamed Lead'}`;
+        
+        // Build form HTML
+        body.innerHTML = `
+            <div class="form-group">
+                <label class="form-label">Name</label>
+                <input type="text" class="form-input" id="drawerName" value="${lead.name || ''}" placeholder="Lead name">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Phone</label>
+                <input type="tel" class="form-input" id="drawerPhone" value="${lead.phone || ''}" placeholder="Phone number">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Address</label>
+                <input type="text" class="form-input" id="drawerAddress" value="${lead.address || ''}" placeholder="Street address">
+            </div>
+            
+            <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="form-group">
+                    <label class="form-label">Suburb</label>
+                    <input type="text" class="form-input" id="drawerSuburb" value="${lead.suburb || ''}" placeholder="Suburb">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Postcode</label>
+                    <input type="text" class="form-input" id="drawerPostcode" value="${lead.postcode || ''}" placeholder="Postcode">
+                </div>
+            </div>
+            
+            <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="form-group">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" id="drawerStatus">
+                        <option value="DQ" ${lead.status === 'DQ' ? 'selected' : ''}>🔵 DQ</option>
+                        <option value="Live" ${lead.status === 'Live' ? 'selected' : ''}>🟢 Live</option>
+                        <option value="Revisit" ${lead.status === 'Revisit' ? 'selected' : ''}>📅 Revisit</option>
+                        <option value="NI" ${lead.status === 'NI' ? 'selected' : ''}>❌ Not Interested</option>
+                        <option value="WN" ${lead.status === 'WN' ? 'selected' : ''}>📞 Wrong Number</option>
+                        <option value="Booked" ${lead.status === 'Booked' ? 'selected' : ''}>✅ Booked</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Ownership</label>
+                    <select class="form-select" id="drawerOwnership">
+                        <option value="Owner" ${lead.ownership === 'Owner' ? 'selected' : ''}>🏠 Owner</option>
+                        <option value="Renter" ${lead.ownership === 'Renter' ? 'selected' : ''}>🏡 Renter</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Notes</label>
+                <textarea class="form-textarea" id="drawerNotes" placeholder="Add notes about this lead...">${lead.notes || ''}</textarea>
+            </div>
+            
+            <!-- Communication Timeline -->
+            <div class="timeline">
+                <h3 class="timeline-title">💬 Communication History</h3>
+                <div id="drawerTimeline">
+                    ${renderTimelineItems(lead)}
+                </div>
+                
+                <div class="quick-note-form">
+                    <input type="text" class="quick-note-input" id="quickNoteInput" placeholder="Add a quick note..." onkeypress="if(event.key==='Enter') addQuickNote()">
+                    <button class="btn btn-primary btn-sm" onclick="addQuickNote()">➕ Add</button>
+                </div>
+            </div>
+        `;
+        
+        drawer.classList.add('active');
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    };
+    
+    function renderTimelineItems(lead) {
+        const history = lead.communicationHistory || [];
+        if (history.length === 0) {
+            return '<div class="empty-state" style="padding: 20px; color: var(--text-muted);">No communication history yet</div>';
+        }
+        
+        return history.slice().reverse().map(item => {
+            const date = new Date(item.timestamp).toLocaleString();
+            return `
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-date">${date} • ${item.user || 'Unknown'}</div>
+                        <div class="timeline-text">${escapeHtml(item.note || item.action || '')}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    window.addQuickNote = function() {
+        const input = document.getElementById('quickNoteInput');
+        const note = input.value.trim();
+        if (!note || !currentDrawerLeadId) return;
+        
+        const lead = state.leads.find(l => l.id === currentDrawerLeadId);
+        if (!lead) return;
+        
+        if (!lead.communicationHistory) lead.communicationHistory = [];
+        
+        lead.communicationHistory.push({
+            timestamp: new Date().toISOString(),
+            user: state.currentUser?.name || 'Unknown',
+            note: note,
+            action: 'Manual Note'
+        });
+        
+        input.value = '';
+        
+        // Refresh timeline
+        document.getElementById('drawerTimeline').innerHTML = renderTimelineItems(lead);
+        
+        showToast('Note added', 'success');
+    };
+    
+    window.closeDrawer = function() {
+        const drawer = document.getElementById('leadDrawer');
+        const overlay = document.getElementById('drawerOverlay');
+        drawer.classList.remove('active');
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+        currentDrawerLeadId = null;
+    };
+    
+    window.saveLeadFromDrawer = function() {
+        if (!currentDrawerLeadId) return;
+        
+        const lead = state.leads.find(l => l.id === currentDrawerLeadId);
+        if (!lead) return;
+        
+        // Update lead data from form
+        lead.name = document.getElementById('drawerName').value;
+        lead.phone = document.getElementById('drawerPhone').value;
+        lead.address = document.getElementById('drawerAddress').value;
+        lead.suburb = document.getElementById('drawerSuburb').value;
+        lead.postcode = document.getElementById('drawerPostcode').value;
+        lead.status = document.getElementById('drawerStatus').value;
+        lead.ownership = document.getElementById('drawerOwnership').value;
+        lead.notes = document.getElementById('drawerNotes').value;
+        
+        // Save to Firestore
+        updateLeadInFirestore(currentDrawerLeadId, lead);
+        
+        // Refresh the table
+        renderLeadsTable();
+        
+        closeDrawer();
+        showToast('Lead updated successfully', 'success');
+    };
 
     function addActivity(type, rep, action, target) {
         state.activities.unshift({
@@ -925,7 +1117,7 @@ function listenToLeads() {
         tbody.innerHTML = filtered.map((lead) => `
             <tr data-id="${lead.id}" class="lead-row">
                 <td class="lead-name-cell">
-                    <div class="lead-name-primary">${lead.name}</div>
+                    <div class="lead-name-primary lead-name-clickable" onclick="openLeadDrawer(${lead.id})">${lead.name}</div>
                     <div class="lead-address-preview">${lead.suburb || '—'}</div>
                 </td>
                 <td>
@@ -935,21 +1127,19 @@ function listenToLeads() {
                 <td>${getStatusBadge(lead.status)}</td>
                 <td>${lead.lastCall ? formatTime(lead.lastCall) : '<span style="color:var(--text-muted);">Never</span>'}</td>
                 <td>${getResultBadge(lead.result)}</td>
-                <td class="actions-cell" onclick="event.stopPropagation()">
-                    <div class="row-actions">
-                        <button class="btn-action-icon" onclick="event.stopPropagation(); quickEditLead(${lead.id})" title="Quick Edit">✏️</button>
-                        <button class="btn-action-icon" onclick="event.stopPropagation(); openCallModal(${lead.id})" title="Log Call">📞</button>
-                        <button class="btn-action-icon" onclick="event.stopPropagation(); showLeadSidebar(${lead.id})" title="View Details">👁️</button>
-                    </div>
+                <td class="action-cell" onclick="event.stopPropagation()">
+                    <button class="icon-btn" onclick="event.stopPropagation(); openLeadDrawer(${lead.id})" title="Edit">✏️</button>
+                    <button class="icon-btn" onclick="event.stopPropagation(); openCallModal(${lead.id})" title="Log Call">📞</button>
+                    <button class="icon-btn delete" onclick="event.stopPropagation(); deleteLead(${lead.id})" title="Delete">🗑️</button>
                 </td>
             </tr>
         `).join('');
 
-        // Row click handlers - click anywhere on row to open sidebar
+        // Row click handlers - click anywhere on row to open drawer
         document.querySelectorAll('.lead-row').forEach((row) => {
             row.addEventListener('click', (e) => {
                 if (!e.target.closest('button') && !e.target.closest('a')) {
-                    showLeadSidebar(parseInt(row.dataset.id));
+                    openLeadDrawer(parseInt(row.dataset.id));
                 }
             });
         });
@@ -3537,6 +3727,10 @@ window.logout = logout;
 window.openModal = openModal;
 window.closeModal = closeModal;
 window.deleteLead = deleteLead;
+window.openLeadDrawer = openLeadDrawer;
+window.closeDrawer = closeDrawer;
+window.saveLeadFromDrawer = saveLeadFromDrawer;
+window.addQuickNote = addQuickNote;
 window.showPage = showPage;
 window.switchTab = switchTab;
 window.toggleDarkMode = toggleDarkMode;

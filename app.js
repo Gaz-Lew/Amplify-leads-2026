@@ -297,59 +297,6 @@ async function updateLeadInFirestore(lead) {
         // Load settings
         loadSettings();
 
-                // Initialize Firebase
-        if (typeof firebase !== 'undefined') {
-            try {
-                db = firebase.firestore();
-                window._db = db;
-                console.log('✅ Firebase Firestore initialized');
-                listenToLeads(); // ← ADD THIS
-            } catch (e) {
-                console.error('Firebase initialization error:', e);
-                db = null;
-            }
-        } else {
-            console.error('❌ Firebase SDK not loaded!');
-        }
-function listenToLeads() {
-    if (!db) return;
-    db.collection('leads').onSnapshot(
-        (snapshot) => {
-            _firestoresyncing = true;
-            state.leads = [];
-            snapshot.forEach((doc) => {
-                const raw = doc.data();
-                const cleaned = {};
-                Object.keys(raw).forEach(k => { cleaned[k.trim()] = raw[k]; });
-
-                // Normalise status to app format
-                if (cleaned.status) {
-                    const s = cleaned.status.toLowerCase().trim();
-                    const statusMap = {
-                        'dq':              'dq',
-                        'revisit':         'revisit',
-                        'booked':          'booked',
-                        'live':            'booked',
-                        'no answer':       'dq',
-                        'not interested':  'not-interested',
-                        'wrong number':    'wrong-number',
-                    };
-                    cleaned.status = statusMap[s] || s;
-                }
-
-                state.leads.push({ id: doc.id, ...cleaned });
-            });
-            renderAll();
-            console.log('🔄 Leads synced from Firestore:', state.leads.length);
-            _firestoresyncing = false;
-        },
-        (error) => {
-            console.error('Error listening to leads:', error);
-            _firestoresyncing = false;
-        }
-    );
-}
-
         // Load saved reps
         const savedReps = localStorage.getItem('asgReps');
         if (savedReps) {
@@ -655,12 +602,204 @@ function listenToLeads() {
 
     function showToast(msg, type = 'info') {
         const c = document.getElementById('toastContainer');
+        if (!c) return;
+        
+        const icons = {
+            success: '✅',
+            error: '❌',
+            warning: '⚠️',
+            info: 'ℹ️'
+        };
+        
         const t = document.createElement('div');
         t.className = `toast toast-${type}`;
-        t.textContent = msg;
+        t.innerHTML = `
+            <span class="toast-icon">${icons[type] || icons.info}</span>
+            <span class="toast-message">${msg}</span>
+        `;
         c.appendChild(t);
-        setTimeout(() => t.remove(), 3500);
+        setTimeout(() => {
+            t.style.animation = 'toastFadeOut 0.3s ease forwards';
+            setTimeout(() => t.remove(), 300);
+        }, 3500);
     }
+    
+    // Drawer state
+    let currentDrawerLeadId = null;
+    
+    // Open lead drawer with full details
+    function openLeadDrawer(leadId) {
+        const lead = state.leads.find(l => l.id === leadId);
+        if (!lead) return;
+        
+        currentDrawerLeadId = leadId;
+        const drawer = document.getElementById('leadDrawer');
+        const overlay = document.getElementById('drawerOverlay');
+        const body = document.getElementById('drawerBody');
+        const title = document.getElementById('drawerTitle');
+        
+        title.textContent = `📇 ${lead.name || 'Unnamed Lead'}`;
+        
+        // Build form HTML
+        body.innerHTML = `
+            <div class="form-group">
+                <label class="form-label">Name</label>
+                <input type="text" class="form-input" id="drawerName" value="${lead.name || ''}" placeholder="Lead name">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Phone</label>
+                <input type="tel" class="form-input" id="drawerPhone" value="${lead.phone || ''}" placeholder="Phone number">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Address</label>
+                <input type="text" class="form-input" id="drawerAddress" value="${lead.address || ''}" placeholder="Street address">
+            </div>
+            
+            <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="form-group">
+                    <label class="form-label">Suburb</label>
+                    <input type="text" class="form-input" id="drawerSuburb" value="${lead.suburb || ''}" placeholder="Suburb">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Postcode</label>
+                    <input type="text" class="form-input" id="drawerPostcode" value="${lead.postcode || ''}" placeholder="Postcode">
+                </div>
+            </div>
+            
+            <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                <div class="form-group">
+                    <label class="form-label">Status</label>
+                    <select class="form-select" id="drawerStatus">
+                        <option value="DQ" ${lead.status === 'DQ' ? 'selected' : ''}>🔵 DQ</option>
+                        <option value="Live" ${lead.status === 'Live' ? 'selected' : ''}>🟢 Live</option>
+                        <option value="Revisit" ${lead.status === 'Revisit' ? 'selected' : ''}>📅 Revisit</option>
+                        <option value="NI" ${lead.status === 'NI' ? 'selected' : ''}>❌ Not Interested</option>
+                        <option value="WN" ${lead.status === 'WN' ? 'selected' : ''}>📞 Wrong Number</option>
+                        <option value="Booked" ${lead.status === 'Booked' ? 'selected' : ''}>✅ Booked</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Ownership</label>
+                    <select class="form-select" id="drawerOwnership">
+                        <option value="Owner" ${lead.ownership === 'Owner' ? 'selected' : ''}>🏠 Owner</option>
+                        <option value="Renter" ${lead.ownership === 'Renter' ? 'selected' : ''}>🏡 Renter</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Notes</label>
+                <textarea class="form-textarea" id="drawerNotes" placeholder="Add notes about this lead...">${lead.notes || ''}</textarea>
+            </div>
+            
+            <!-- Communication Timeline -->
+            <div class="timeline">
+                <h3 class="timeline-title">💬 Communication History</h3>
+                <div id="drawerTimeline">
+                    ${renderTimelineItems(lead)}
+                </div>
+                
+                <div class="quick-note-form">
+                    <input type="text" class="quick-note-input" id="quickNoteInput" placeholder="Add a quick note..." onkeypress="if(event.key==='Enter') addQuickNote()">
+                    <button class="btn btn-primary btn-sm" onclick="addQuickNote()">➕ Add</button>
+                </div>
+            </div>
+        `;
+        
+        drawer.classList.add('active');
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+    
+    function renderTimelineItems(lead) {
+        const history = lead.communicationHistory || [];
+        if (history.length === 0) {
+            return '<div class="empty-state" style="padding: 20px; color: var(--text-muted);">No communication history yet</div>';
+        }
+        
+        return history.slice().reverse().map(item => {
+            const date = new Date(item.timestamp).toLocaleString();
+            return `
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-content">
+                        <div class="timeline-date">${date} • ${item.user || 'Unknown'}</div>
+                        <div class="timeline-text">${escapeHtml(item.note || item.action || '')}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function addQuickNote() {
+        const input = document.getElementById('quickNoteInput');
+        const note = input.value.trim();
+        if (!note || !currentDrawerLeadId) return;
+        
+        const lead = state.leads.find(l => l.id === currentDrawerLeadId);
+        if (!lead) return;
+        
+        if (!lead.communicationHistory) lead.communicationHistory = [];
+        
+        lead.communicationHistory.push({
+            timestamp: new Date().toISOString(),
+            user: state.currentUser?.name || 'Unknown',
+            note: note,
+            action: 'Manual Note'
+        });
+        
+        input.value = '';
+        
+        // Refresh timeline
+        document.getElementById('drawerTimeline').innerHTML = renderTimelineItems(lead);
+        
+        showToast('Note added', 'success');
+    }
+    
+    function closeDrawer() {
+        const drawer = document.getElementById('leadDrawer');
+        const overlay = document.getElementById('drawerOverlay');
+        drawer.classList.remove('active');
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+        currentDrawerLeadId = null;
+    }
+    
+    function saveLeadFromDrawer() {
+        if (!currentDrawerLeadId) return;
+        
+        const lead = state.leads.find(l => l.id === currentDrawerLeadId);
+        if (!lead) return;
+        
+        // Update lead data from form
+        lead.name = document.getElementById('drawerName').value;
+        lead.phone = document.getElementById('drawerPhone').value;
+        lead.address = document.getElementById('drawerAddress').value;
+        lead.suburb = document.getElementById('drawerSuburb').value;
+        lead.postcode = document.getElementById('drawerPostcode').value;
+        lead.status = document.getElementById('drawerStatus').value;
+        lead.ownership = document.getElementById('drawerOwnership').value;
+        lead.notes = document.getElementById('drawerNotes').value;
+        
+        // Save to Firestore
+        updateLeadInFirestore(currentDrawerLeadId, lead);
+        
+        // Refresh the table
+        renderLeadsTable();
+        
+        closeDrawer();
+        showToast('Lead updated successfully', 'success');
+    };
 
     function addActivity(type, rep, action, target) {
         state.activities.unshift({
@@ -842,6 +981,7 @@ function listenToLeads() {
         if (!lead.callHistory) lead.callHistory = [];
         lead.callHistory.push({ date: new Date().toISOString(), result, notes });
         
+        updateLeadInFirestore(lead);
         saveLeads();
         updateLeadInFirestore(lead);
         closeModal('callResultModal');
@@ -899,93 +1039,59 @@ function listenToLeads() {
     }
 
     function renderLeadsTable() {
-        const filtered = getFilteredLeads();
-        const tbody = document.getElementById('leadsTableBody');
-        const empty = document.getElementById('emptyStateLeads');
-        
-        // Update tab counts
-        ['leads', 'booked', 'revisit', 'not-interested', 'wrong-number'].forEach((tab) => {
-            const el = document.getElementById(`count-${tab}`);
-            if (el) {
-                if (tab === 'leads') {
-                    el.textContent = state.leads.filter((l) => ['dq', 'revisit'].includes(l.status)).length;
-                } else {
-                    el.textContent = state.leads.filter((l) => l.status === tab).length;
-                }
+    const filtered = getFilteredLeads();
+    const tbody = document.getElementById('leadsTableBody');
+    const empty = document.getElementById('emptyStateLeads');
+
+    ['leads', 'booked', 'revisit', 'not-interested', 'wrong-number'].forEach((tab) => {
+        const el = document.getElementById(`count-${tab}`);
+        if (el) {
+            if (tab === 'leads') {
+                el.textContent = state.leads.filter((l) => ['dq', 'revisit'].includes(l.status)).length;
+            } else {
+                el.textContent = state.leads.filter((l) => l.status === tab).length;
+            }
+        }
+    });
+
+    if (!filtered.length) {
+        tbody.innerHTML = '';
+        empty.style.display = 'block';
+        return;
+    }
+
+    empty.style.display = 'none';
+    tbody.innerHTML = filtered.map((lead) => `
+        <tr data-id="${lead.id}" class="lead-row">
+            <td class="lead-name-cell">
+                <div class="lead-name-primary lead-name-clickable" onclick="openLeadDrawer('${lead.id}')">${lead.name}</div>
+                <div class="lead-address-preview">${lead.suburb || '—'}</div>
+            </td>
+            <td>
+                <a href="tel:${lead.phone}" class="lead-phone-link">${lead.phone}</a>
+            </td>
+            <td><span class="rep-tag"><span class="rep-dot"></span>${getRepName(lead.dqRep)}</span></td>
+            <td>${getStatusBadge(lead.status)}</td>
+            <td>${lead.lastCall ? formatTime(lead.lastCall) : '<span style="color:var(--text-muted);">Never</span>'}</td>
+            <td>${getResultBadge(lead.result)}</td>
+            <td class="action-cell" onclick="event.stopPropagation()">
+                <button class="icon-btn" onclick="event.stopPropagation(); openLeadDrawer('${lead.id}')" title="Edit">✏️</button>
+                <button class="icon-btn" onclick="event.stopPropagation(); openCallModal('${lead.id}')" title="Log Call">📞</button>
+                <button class="icon-btn delete" onclick="event.stopPropagation(); deleteLead('${lead.id}')" title="Delete">🗑️</button>
+            </td>
+        </tr>
+    `).join('');
+
+    // Row click handlers
+    document.querySelectorAll('.lead-row').forEach((row) => {
+        row.addEventListener('click', (e) => {
+            if (!e.target.closest('button') && !e.target.closest('a')) {
+                openLeadDrawer(row.dataset.id); // ← string ID, no parseInt
             }
         });
-        
-        if (!filtered.length) {
-            tbody.innerHTML = '';
-            empty.style.display = 'block';
-            return;
-        }
-        
-        empty.style.display = 'none';
-        tbody.innerHTML = filtered.map((lead) => `
-            <tr data-id="${lead.id}" class="lead-row">
-                <td data-field="name" class="editable lead-name">${lead.name}</td>
-                <td data-field="phone" class="editable"><a href="tel:${lead.phone}">${lead.phone}</a></td>
-                <td><span class="rep-tag"><span class="rep-dot"></span>${getRepName(lead.dqRep)}</span></td>
-                <td data-field="suburb" class="editable">${lead.suburb || '—'}</td>
-                <td>${getStatusBadge(lead.status)}</td>
-                <td>${lead.lastCall ? formatTime(lead.lastCall) : '<span style="color:var(--text-muted);">Never</span>'}</td>
-                <td>${getResultBadge(lead.result)}</td>
-                <td onclick="event.stopPropagation()">
-                    <button class="btn btn-secondary btn-xs" onclick="event.stopPropagation(); openCallModal(${lead.id})">📞 Log Call</button>
-                </td>
-            </tr>
-        `).join('');
-        
-        // Row click handlers
-        document.querySelectorAll('.lead-row').forEach((row) => {
-            row.addEventListener('click', (e) => {
-                if (!e.target.closest('button') && !e.target.closest('a') && e.target.tagName !== 'INPUT') {
-                    showLeadSidebar(parseInt(row.dataset.id));
-                }
-            });
-        });
-        
-        // Inline edit handlers
-        document.querySelectorAll('.editable').forEach((cell) => {
-            cell.addEventListener('click', function(e) {
-                if (e.target.tagName === 'INPUT' || e.target.tagName === 'A') return;
-                const original = this.textContent.trim();
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.value = original;
-                input.style.width = '100%';
-                this.innerHTML = '';
-                this.appendChild(input);
-                input.focus();
-                input.select();
-                
-                const save = () => {
-                    const newVal = input.value.trim();
-                    this.textContent = newVal;
-                    const leadId = parseInt(this.closest('tr').dataset.id);
-                    const lead = state.leads.find((l) => l.id === leadId);
-                    const field = this.dataset.field;
-                    if (lead && field) {
-                        lead[field] = newVal;
-                        if (['houseNum', 'street', 'suburb', 'postcode'].some((f) => field.includes(f))) {
-                            lead.address = buildAddress(lead);
-                        }
-                        updateLeadInFirestore(lead);
-                        showToast('Updated', 'success');
-                    }
-                };
-                
-                input.onblur = save;
-                input.onkeydown = (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        save();
-                    }
-                };
-            });
-        });
-    }
+    });
+}
+
 
     // ==================== SIDEBAR ====================
     // ==================== LEAD PROFILE PANEL ====================
@@ -1043,70 +1149,71 @@ function listenToLeads() {
         ).join('');
         body.innerHTML = `
             <div class="profile-section">
-                <div class="profile-section-title">Contact Info</div>
+                <div class="profile-section-title">📇 Contact Info</div>
                 <div class="profile-fields">
                     <div class="profile-field">
                         <label>Full Name</label>
-                        <input id="pf_name" value="${lead.name || ''}" placeholder="Full name">
+                        <input id="pf_name" value="${lead.name || ''}" placeholder="Full name" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
+                        <div class="inline-edit-hint">Click to edit</div>
                     </div>
                     <div class="profile-field">
                         <label>Phone</label>
-                        <input id="pf_phone" value="${lead.phone || ''}" placeholder="Phone number">
+                        <input id="pf_phone" value="${lead.phone || ''}" placeholder="Phone number" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
                     </div>
                     <div class="profile-field full-width">
                         <label>Address</label>
-                        <input id="pf_address" value="${lead.address || buildAddress(lead)}" placeholder="Full address">
+                        <input id="pf_address" value="${lead.address || buildAddress(lead)}" placeholder="Full address" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
                     </div>
                     <div class="profile-field">
                         <label>Suburb</label>
-                        <input id="pf_suburb" value="${lead.suburb || ''}" placeholder="Suburb">
+                        <input id="pf_suburb" value="${lead.suburb || ''}" placeholder="Suburb" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
                     </div>
                     <div class="profile-field">
                         <label>State</label>
-                        <input id="pf_state" value="${lead.state || ''}" placeholder="State">
+                        <input id="pf_state" value="${lead.state || ''}" placeholder="State" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
                     </div>
                     <div class="profile-field">
                         <label>Postcode</label>
-                        <input id="pf_postcode" value="${lead.postcode || ''}" placeholder="Postcode">
+                        <input id="pf_postcode" value="${lead.postcode || ''}" placeholder="Postcode" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
                     </div>
                     <div class="profile-field">
                         <label>Lead Date</label>
-                        <input id="pf_leadDate" type="date" value="${lead.leadDate || ''}">
+                        <input id="pf_leadDate" type="date" value="${lead.leadDate || ''}" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
                     </div>
                 </div>
             </div>
             <div class="profile-section">
-                <div class="profile-section-title">Lead Info</div>
+                <div class="profile-section-title">📊 Lead Info</div>
                 <div class="profile-fields">
                     <div class="profile-field">
                         <label>Status</label>
-                        <select id="pf_status">
-                            <option value="dq" ${lead.status==='dq'?'selected':''}>DQ</option>
-                            <option value="booked" ${lead.status==='booked'?'selected':''}>Booked</option>
-                            <option value="revisit" ${lead.status==='revisit'?'selected':''}>Revisit</option>
-                            <option value="not-interested" ${lead.status==='not-interested'?'selected':''}>Not Interested</option>
-                            <option value="wrong-number" ${lead.status==='wrong-number'?'selected':''}>Wrong #</option>
+                        <select id="pf_status" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
+                            <option value="dq" ${lead.status==='dq'?'selected':''}>🔵 DQ</option>
+                            <option value="booked" ${lead.status==='booked'?'selected':''}>✅ Booked</option>
+                            <option value="revisit" ${lead.status==='revisit'?'selected':''}>📅 Revisit</option>
+                            <option value="not-interested" ${lead.status==='not-interested'?'selected':''}>❌ Not Interested</option>
+                            <option value="wrong-number" ${lead.status==='wrong-number'?'selected':''}>😶 Wrong #</option>
                         </select>
                     </div>
                     <div class="profile-field">
                         <label>Ownership</label>
-                        <select id="pf_ownership">
+                        <select id="pf_ownership" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
                             <option value="" ${!lead.ownership?'selected':''}>Unknown</option>
-                            <option value="owner" ${lead.ownership==='owner'?'selected':''}>Owner</option>
-                            <option value="renter" ${lead.ownership==='renter'?'selected':''}>Renter</option>
+                            <option value="owner" ${lead.ownership==='owner'?'selected':''}>🏠 Owner</option>
+                            <option value="renter" ${lead.ownership==='renter'?'selected':''}>🏡 Renter</option>
                         </select>
                     </div>
                     <div class="profile-field">
                         <label>Superannuation</label>
-                        <input id="pf_super" value="${lead.super || ''}" placeholder="Super fund / amount">
+                        <input id="pf_super" value="${lead.super || ''}" placeholder="Super fund / amount" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">
                     </div>
                     <div class="profile-field">
                         <label>DQ Rep</label>
-                        <select id="pf_dqRep">${repOptions}</select>
+                        <select id="pf_dqRep" onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">${repOptions}</select>
                     </div>
                     <div class="profile-field full-width">
                         <label>Notes</label>
-                        <textarea id="pf_notes" placeholder="Notes about this lead...">${lead.notes || ''}</textarea>
+                        <textarea id="pf_notes" placeholder="Notes about this lead..." onclick="this.classList.add('editing')" onblur="this.classList.remove('editing')">${lead.notes || ''}</textarea>
                     </div>
                 </div>
             </div>`;
@@ -1159,7 +1266,7 @@ function listenToLeads() {
                     <label>Call Notes</label>
                     <textarea id="logNotes" placeholder="What happened on this call?"></textarea>
                 </div>
-                <button class="btn btn-primary" style="width:100%;" onclick="submitProfileCallLog(${lead.id})">📞 Save Call Log</button>
+                <button class="btn btn-primary" style="width:100%;" onclick="submitProfileCallLog(${'lead.id'})">📞 Save Call Log</button>
             </div>`;
     }
 
@@ -3568,6 +3675,10 @@ window.logout = logout;
 window.openModal = openModal;
 window.closeModal = closeModal;
 window.deleteLead = deleteLead;
+window.openLeadDrawer = openLeadDrawer;
+window.closeDrawer = closeDrawer;
+window.saveLeadFromDrawer = saveLeadFromDrawer;
+window.addQuickNote = addQuickNote;
 window.showPage = showPage;
 window.switchTab = switchTab;
 window.toggleDarkMode = toggleDarkMode;
